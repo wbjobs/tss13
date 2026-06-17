@@ -6,11 +6,16 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type ClientListener interface {
+	OnClientConnected(c *Client)
+	OnClientDisconnected(c *Client)
+}
+
 type Hub struct {
 	clients    map[int]*Client
 	register   chan *Client
 	unregister chan *Client
-	broadcast  chan ServerMessage
+	listener   ClientListener
 	mu         sync.RWMutex
 	nextID     int
 }
@@ -30,9 +35,12 @@ func NewHub(game *Game) *Hub {
 		clients:    make(map[int]*Client),
 		register:   make(chan *Client, 256),
 		unregister: make(chan *Client, 256),
-		broadcast:  make(chan ServerMessage, 256),
 		nextID:     1,
 	}
+}
+
+func (h *Hub) SetListener(l ClientListener) {
+	h.listener = l
 }
 
 func (h *Hub) Run() {
@@ -44,6 +52,9 @@ func (h *Hub) Run() {
 			h.nextID++
 			h.clients[client.ID] = client
 			h.mu.Unlock()
+			if h.listener != nil {
+				h.listener.OnClientConnected(client)
+			}
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -52,18 +63,21 @@ func (h *Hub) Run() {
 				close(client.send)
 			}
 			h.mu.Unlock()
-
-		case msg := <-h.broadcast:
-			h.mu.RLock()
-			for _, client := range h.clients {
-				select {
-				case client.send <- msg:
-				default:
-				}
+			if h.listener != nil {
+				h.listener.OnClientDisconnected(client)
 			}
-			h.mu.RUnlock()
 		}
 	}
+}
+
+func (h *Hub) GetClients() []*Client {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	result := make([]*Client, 0, len(h.clients))
+	for _, c := range h.clients {
+		result = append(result, c)
+	}
+	return result
 }
 
 func (c *Client) ReadPump() {

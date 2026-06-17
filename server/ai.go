@@ -200,3 +200,61 @@ func UpdateMonsterAI(monster *Monster, dungeon *Dungeon, players map[int]*Player
 		monster.Y = next[1]
 	}
 }
+
+func UpdateMonsterAIWithFlow(monster *Monster, dungeon *Dungeon, players map[int]*Player, flow *FlowField) {
+	if !monster.Alive {
+		return
+	}
+
+	target := findVisiblePlayer(monster, players)
+	if target == nil {
+		monster.AIState = "idle"
+		monster.TargetID = 0
+		if rand.Float64() < 0.2 {
+			dirs := [][2]int{{0, -1}, {0, 1}, {-1, 0}, {1, 0}}
+			d := dirs[rand.Intn(len(dirs))]
+			nx, ny := monster.X+d[0], monster.Y+d[1]
+			if isWalkable(dungeon, nx, ny) {
+				monster.X = nx
+				monster.Y = ny
+			}
+		}
+		return
+	}
+
+	monster.TargetID = target.ID
+	d := distance(monster.X, monster.Y, target.X, target.Y)
+	if d <= 1.5 {
+		monster.AIState = "attack"
+		return
+	}
+
+	monster.AIState = "chase"
+
+	dx, dy, ok := flow.GetDirection(monster.X, monster.Y)
+	if !ok {
+		return
+	}
+
+	ndx, ndy := 0, 0
+	if dx < 0 {
+		ndx = -1
+	} else if dx > 0 {
+		ndx = 1
+	}
+	if dy < 0 {
+		ndy = -1
+	} else if dy > 0 {
+		ndy = 1
+	}
+
+	if ndx == 0 && ndy == 0 {
+		return
+	}
+
+	nx, ny := monster.X+ndx, monster.Y+ndy
+	if isWalkable(dungeon, nx, ny) {
+		monster.X = nx
+		monster.Y = ny
+	}
+}

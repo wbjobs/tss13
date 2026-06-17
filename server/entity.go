@@ -24,11 +24,16 @@ type Entity struct {
 
 type Player struct {
 	Entity
-	Level      int
-	XP         int
-	XPToNext   int
-	Visibility int
+	Level       int
+	XP          int
+	XPToNext    int
+	Visibility  int
 	PlayerLight float64
+	LastFOVX    int
+	LastFOVY    int
+	CachedFOV   map[[2]int]bool
+	CachedTiles []VisibleTile
+	FOVDirty    bool
 }
 
 type Monster struct {
